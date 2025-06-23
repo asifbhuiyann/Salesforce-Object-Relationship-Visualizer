@@ -1,0 +1,1489 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salesforce Schema Builder</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --sf-blue: #0176d3;
+            --sf-dark-blue: #014486;
+            --sf-light-blue: #1589ee;
+            --sf-cloud: #00a1e0;
+            --accent-green: #4bca81;
+            --accent-orange: #fe7765;
+            --accent-purple: #9050e9;
+            --accent-yellow: #fdb439;
+            --bg-primary: #f3f3f4;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #fafbfc;
+            --text-primary: #080707;
+            --text-secondary: #3e3e3c;
+            --text-tertiary: #706e6b;
+            --border-color: #dddbda;
+            --shadow: 0 2px 4px rgba(0,0,0,0.1);
+            --shadow-hover: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        body {
+            font-family: 'Salesforce Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            height: 100vh;
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            background: var(--bg-primary);
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .header-content {
+            max-width: 1800px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 1.25rem;
+            font-weight: 300;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .header-icon {
+            width: 24px;
+            height: 24px;
+            fill: var(--sf-blue);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.75rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .toolbar-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .toolbar-divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border-color);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border-radius: 4px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: inherit;
+        }
+
+        .btn:hover {
+            background: var(--bg-tertiary);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-primary {
+            background: var(--sf-blue);
+            color: white;
+            border-color: var(--sf-blue);
+        }
+
+        .btn-primary:hover {
+            background: var(--sf-dark-blue);
+            border-color: var(--sf-dark-blue);
+        }
+
+        .btn-icon {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        /* File input */
+        .file-input-wrapper {
+            position: relative;
+        }
+
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        /* Search */
+        .search-container {
+            position: relative;
+            width: 300px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.5rem 1rem 0.5rem 2.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 0.875rem;
+            background: var(--bg-tertiary);
+            transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--sf-blue);
+            background: var(--bg-secondary);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            fill: var(--text-tertiary);
+        }
+
+        /* View options */
+        .view-options {
+            display: flex;
+            gap: 0.5rem;
+            background: var(--bg-tertiary);
+            padding: 0.25rem;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+
+        .view-btn {
+            padding: 0.375rem 0.75rem;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+
+        .view-btn.active {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* Main canvas */
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: var(--bg-primary);
+            background-image: 
+                linear-gradient(var(--border-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Object cards */
+        .object-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            min-width: 280px;
+            max-width: 350px;
+            cursor: move;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+        }
+
+        .object-card:hover {
+            box-shadow: var(--shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .object-card.selected {
+            border-color: var(--sf-blue);
+            box-shadow: 0 0 0 3px rgba(1, 118, 211, 0.2);
+        }
+
+        .object-card.highlighted {
+            border-color: var(--accent-yellow);
+            box-shadow: 0 0 0 3px rgba(253, 180, 57, 0.3);
+        }
+
+        .object-header {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .object-header.standard {
+            background: linear-gradient(to right, #f8f8f8, #f0f0f0);
+            border-bottom: 2px solid var(--accent-green);
+        }
+
+        .object-header.custom {
+            background: linear-gradient(to right, #fff8f5, #ffebe5);
+            border-bottom: 2px solid var(--accent-orange);
+        }
+
+        .object-header.system {
+            background: linear-gradient(to right, #f8f5ff, #f0e5ff);
+            border-bottom: 2px solid var(--accent-purple);
+        }
+
+        .object-header.external {
+            background: linear-gradient(to right, #f0f8ff, #e5f3ff);
+            border-bottom: 2px solid var(--sf-cloud);
+        }
+
+        .object-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .object-type-icon {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+
+        .object-type-icon.standard { fill: var(--accent-green); }
+        .object-type-icon.custom { fill: var(--accent-orange); }
+        .object-type-icon.system { fill: var(--accent-purple); }
+        .object-type-icon.external { fill: var(--sf-cloud); }
+
+        .object-actions {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .object-action-btn {
+            width: 20px;
+            height: 20px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .object-action-btn:hover {
+            background: rgba(0,0,0,0.05);
+            color: var(--text-primary);
+        }
+
+        .object-body {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .object-info {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .object-info-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .object-info-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .object-info-label {
+            font-weight: 600;
+            color: var(--text-tertiary);
+            min-width: 60px;
+            font-size: 0.7rem;
+        }
+
+        .object-info-value {
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        .fields-container {
+            padding: 0.5rem;
+        }
+
+        .field-item {
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            background: var(--bg-tertiary);
+            transition: all 0.2s ease;
+            font-size: 0.75rem;
+        }
+
+        .field-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .field-item:hover {
+            background: #e8f4ff;
+            border-color: var(--sf-blue);
+        }
+
+        .field-item.lookup {
+            border-left: 3px solid var(--accent-green);
+        }
+
+        .field-item.master-detail {
+            border-left: 3px solid var(--accent-orange);
+        }
+
+        .field-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .field-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .field-type {
+            font-size: 0.7rem;
+            padding: 0.125rem 0.375rem;
+            border-radius: 3px;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .field-type.lookup {
+            background: #e8f8e8;
+            color: #2e7d32;
+            border-color: var(--accent-green);
+        }
+
+        .field-type.master-detail {
+            background: #ffebe5;
+            color: #d84a1b;
+            border-color: var(--accent-orange);
+        }
+
+        .field-details {
+            font-size: 0.7rem;
+            color: var(--text-tertiary);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.25rem;
+        }
+
+        .field-detail {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .field-icon {
+            width: 12px;
+            height: 12px;
+            fill: currentColor;
+        }
+
+        /* Relationships */
+        .relationship-line {
+            stroke: var(--text-tertiary);
+            stroke-width: 2;
+            fill: none;
+            pointer-events: stroke;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .relationship-line.lookup {
+            stroke: var(--accent-green);
+            stroke-dasharray: 5,3;
+        }
+
+        .relationship-line.master-detail {
+            stroke: var(--accent-orange);
+            stroke-width: 3;
+        }
+
+        .relationship-line:hover {
+            stroke-width: 4;
+            filter: drop-shadow(0 0 3px currentColor);
+        }
+
+        .relationship-arrow {
+            fill: var(--text-tertiary);
+        }
+
+        .relationship-arrow.lookup {
+            fill: var(--accent-green);
+        }
+
+        .relationship-arrow.master-detail {
+            fill: var(--accent-orange);
+        }
+
+        /* Minimap */
+        .minimap {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 200px;
+            height: 150px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .minimap-viewport {
+            border: 2px solid var(--sf-blue);
+            background: rgba(1, 118, 211, 0.1);
+            position: absolute;
+            pointer-events: none;
+        }
+
+        /* Zoom controls */
+        .zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.25rem;
+            box-shadow: var(--shadow);
+        }
+
+        .zoom-btn {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .zoom-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        /* Loading */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-content {
+            text-align: center;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--sf-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Empty state */
+        .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 1rem;
+            opacity: 0.3;
+        }
+
+        .empty-state h3 {
+            font-size: 1.25rem;
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            background: var(--text-primary);
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+            box-shadow: var(--shadow);
+        }
+
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 4px solid transparent;
+            border-top-color: var(--text-primary);
+        }
+
+        /* Properties panel */
+        .properties-panel {
+            position: absolute;
+            top: 0;
+            right: -350px;
+            width: 350px;
+            height: 100%;
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+            transition: right 0.3s ease;
+            overflow-y: auto;
+        }
+
+        .properties-panel.open {
+            right: 0;
+        }
+
+        .properties-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .properties-title {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .properties-content {
+            padding: 1rem;
+        }
+
+        .property-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .property-section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-tertiary);
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.05em;
+        }
+
+        .property-item {
+            margin-bottom: 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        .property-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .property-value {
+            color: var(--text-primary);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-tertiary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .toolbar {
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+
+            .search-container {
+                width: 200px;
+            }
+
+            .minimap {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-content">
+                <h1>
+                    <svg class="header-icon" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    Schema Builder
+                </h1>
+                <div class="header-actions">
+                    <button class="btn" onclick="exportDiagram()">
+                        <svg class="btn-icon" viewBox="0 0 24 24">
+                            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                        </svg>
+                        Export
+                    </button>
+                    <button class="btn" onclick="showHelp()">
+                        <svg class="btn-icon" viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+                        </svg>
+                        Help
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="toolbar-section">
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" class="file-input" accept=".object,.xml" multiple>
+                    <button class="btn btn-primary">
+                        <svg class="btn-icon" viewBox="0 0 24 24">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                        </svg>
+                        Upload Objects
+                    </button>
+                </div>
+                <span id="fileCount" style="font-size: 0.875rem; color: var(--text-secondary);">No objects loaded</span>
+            </div>
+
+            <div class="toolbar-divider"></div>
+
+            <div class="toolbar-section">
+                <div class="search-container">
+                    <svg class="search-icon" viewBox="0 0 24 24">
+                        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                    </svg>
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search objects...">
+                </div>
+            </div>
+
+            <div class="toolbar-divider"></div>
+
+            <div class="toolbar-section">
+                <div class="view-options">
+                    <button class="view-btn active" data-filter="all">All</button>
+                    <button class="view-btn" data-filter="standard">Standard</button>
+                    <button class="view-btn" data-filter="custom">Custom</button>
+                    <button class="view-btn" data-filter="external">External</button>
+                </div>
+            </div>
+
+            <div class="toolbar-section" style="margin-left: auto;">
+                <button class="btn" onclick="autoLayout()">
+                    <svg class="btn-icon" viewBox="0 0 24 24">
+                        <path d="M3 3h18v2H3V3zm0 16h18v2H3v-2zm0-8h18v2H3v-2z"/>
+                    </svg>
+                    Auto Layout
+                </button>
+                <button class="btn" onclick="toggleProperties()">
+                    <svg class="btn-icon" viewBox="0 0 24 24">
+                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                    </svg>
+                    Properties
+                </button>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <svg id="canvas"></svg>
+            
+            <div class="empty-state" id="emptyState">
+                <svg class="empty-state-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                <h3>No Objects Loaded</h3>
+                <p>Upload your Salesforce .object files to start building your schema</p>
+            </div>
+
+            <div class="zoom-controls">
+                <button class="zoom-btn" onclick="zoomIn()" title="Zoom In">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                    </svg>
+                </button>
+                <button class="zoom-btn" onclick="zoomOut()" title="Zoom Out">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 13H5v-2h14v2z"/>
+                    </svg>
+                </button>
+                <button class="zoom-btn" onclick="fitToScreen()" title="Fit to Screen">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15 3h6v6h-2V5h-4V3zM9 3v2H5v4H3V3h6zm12 16v-4h-2v4h-4v2h6v-2zM9 21v-2H5v-4H3v6h6z"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="minimap" id="minimap" style="display: none;">
+                <svg id="minimapSvg"></svg>
+                <div class="minimap-viewport"></div>
+            </div>
+
+            <div class="loading-overlay" id="loading" style="display: none;">
+                <div class="loading-content">
+                    <div class="spinner"></div>
+                    <div>Processing objects...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="properties-panel" id="propertiesPanel">
+            <div class="properties-header">
+                <h2 class="properties-title">Properties</h2>
+                <button class="btn" onclick="toggleProperties()">×</button>
+            </div>
+            <div class="properties-content" id="propertiesContent">
+                <p style="color: var(--text-tertiary);">Select an object to view its properties</p>
+            </div>
+        </div>
+
+        <div class="tooltip" id="tooltip"></div>
+    </div>
+
+    <script>
+        // Global variables
+        let svg, zoom, container;
+        let objects = new Map();
+        let relationships = [];
+        let selectedObject = null;
+        let currentFilter = 'all';
+        let searchTerm = '';
+        let scale = 1;
+        let translate = [0, 0];
+
+        // Initialize
+        function init() {
+            const canvas = document.getElementById('canvas');
+            const rect = canvas.getBoundingClientRect();
+            
+            svg = d3.select('#canvas')
+                .attr('width', rect.width)
+                .attr('height', rect.height);
+
+            // Create defs for arrows
+            const defs = svg.append('defs');
+            
+            // Lookup arrow
+            defs.append('marker')
+                .attr('id', 'arrow-lookup')
+                .attr('viewBox', '0 0 10 10')
+                .attr('refX', 10)
+                .attr('refY', 5)
+                .attr('markerWidth', 8)
+                .attr('markerHeight', 8)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M 0 0 L 10 5 L 0 10 z')
+                .attr('class', 'relationship-arrow lookup');
+
+            // Master-detail arrow
+            defs.append('marker')
+                .attr('id', 'arrow-master-detail')
+                .attr('viewBox', '0 0 10 10')
+                .attr('refX', 10)
+                .attr('refY', 5)
+                .attr('markerWidth', 8)
+                .attr('markerHeight', 8)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M 0 0 L 10 5 L 0 10 z')
+                .attr('class', 'relationship-arrow master-detail');
+
+            // Create zoom behavior
+            zoom = d3.zoom()
+                .scaleExtent([0.1, 3])
+                .on('zoom', handleZoom);
+
+            svg.call(zoom);
+
+            // Create container group
+            container = svg.append('g').attr('class', 'container');
+
+            // Create layers
+            container.append('g').attr('class', 'relationships-layer');
+            container.append('g').attr('class', 'objects-layer');
+
+            // Event listeners
+            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+            document.getElementById('searchInput').addEventListener('input', handleSearch);
+            
+            // View filters
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.addEventListener('click', handleFilter);
+            });
+
+            // Window resize
+            window.addEventListener('resize', handleResize);
+        }
+
+        // Handle file upload
+        async function handleFileUpload(event) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0) return;
+
+            showLoading(true);
+            objects.clear();
+            relationships = [];
+
+            try {
+                const contents = await Promise.all(files.map(readFile));
+                contents.forEach((content, index) => {
+                    parseObjectFile(content, files[index].name);
+                });
+
+                updateFileCount();
+                renderDiagram();
+                autoLayout();
+                hideEmptyState();
+                showLoading(false);
+            } catch (error) {
+                console.error('Error processing files:', error);
+                showLoading(false);
+                alert('Error processing files. Please check the console for details.');
+            }
+        }
+
+        // Read file
+        function readFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve({ name: file.name, content: e.target.result });
+                reader.onerror = reject;
+                reader.readAsText(file);
+            });
+        }
+
+        // Parse object file
+        function parseObjectFile(fileData, fileName) {
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(fileData.content, 'text/xml');
+                
+                const customObject = xmlDoc.getElementsByTagName('CustomObject')[0];
+                if (!customObject) return;
+
+                const objectName = fileName.replace('.object', '').replace('.xml', '');
+                
+                const object = {
+                    id: objectName,
+                    name: objectName,
+                    label: getXMLValue(customObject, 'label') || objectName,
+                    description: getXMLValue(customObject, 'description'),
+                    type: determineObjectType(objectName),
+                    customSettingsType: getXMLValue(customObject, 'customSettingsType'),
+                    deploymentStatus: getXMLValue(customObject, 'deploymentStatus'),
+                    sharingModel: getXMLValue(customObject, 'sharingModel'),
+                    enableActivities: getXMLValue(customObject, 'enableActivities') === 'true',
+                    enableHistory: getXMLValue(customObject, 'enableHistory') === 'true',
+                    enableReports: getXMLValue(customObject, 'enableReports') === 'true',
+                    enableSearch: getXMLValue(customObject, 'enableSearch') === 'true',
+                    enableSharing: getXMLValue(customObject, 'enableSharing') === 'true',
+                    enableStreamingApi: getXMLValue(customObject, 'enableStreamingApi') === 'true',
+                    fields: [],
+                    x: Math.random() * 800 + 100,
+                    y: Math.random() * 600 + 100
+                };
+
+                // Parse fields
+                const fields = customObject.getElementsByTagName('fields');
+                for (let field of fields) {
+                    const fieldData = parseField(field, objectName);
+                    if (fieldData) {
+                        object.fields.push(fieldData);
+                        
+                        // Create relationship if it's a lookup or master-detail
+                        if (fieldData.type === 'Lookup' || fieldData.type === 'MasterDetail') {
+                            if (fieldData.referenceTo) {
+                                relationships.push({
+                                    id: `${objectName}-${fieldData.fullName}`,
+                                    source: objectName,
+                                    target: fieldData.referenceTo,
+                                    type: fieldData.type.toLowerCase().replace('detail', '-detail'),
+                                    fieldName: fieldData.fullName,
+                                    fieldLabel: fieldData.label,
+                                    relationshipName: fieldData.relationshipName,
+                                    deleteConstraint: fieldData.deleteConstraint,
+                                    required: fieldData.required
+                                });
+                            }
+                        }
+                    }
+                }
+
+                objects.set(objectName, object);
+            } catch (error) {
+                console.error(`Error parsing ${fileName}:`, error);
+            }
+        }
+
+        // Parse field
+        function parseField(fieldElement, parentObject) {
+            const field = {
+                fullName: getXMLValue(fieldElement, 'fullName'),
+                label: getXMLValue(fieldElement, 'label'),
+                type: getXMLValue(fieldElement, 'type'),
+                referenceTo: getXMLValue(fieldElement, 'referenceTo'),
+                relationshipName: getXMLValue(fieldElement, 'relationshipName'),
+                deleteConstraint: getXMLValue(fieldElement, 'deleteConstraint'),
+                required: getXMLValue(fieldElement, 'required') === 'true',
+                unique: getXMLValue(fieldElement, 'unique') === 'true',
+                externalId: getXMLValue(fieldElement, 'externalId') === 'true',
+                length: getXMLValue(fieldElement, 'length'),
+                precision: getXMLValue(fieldElement, 'precision'),
+                scale: getXMLValue(fieldElement, 'scale'),
+                defaultValue: getXMLValue(fieldElement, 'defaultValue'),
+                formula: getXMLValue(fieldElement, 'formula'),
+                description: getXMLValue(fieldElement, 'description'),
+                inlineHelpText: getXMLValue(fieldElement, 'inlineHelpText')
+            };
+
+            return field.fullName ? field : null;
+        }
+
+        // Get XML value
+        function getXMLValue(parent, tagName) {
+            const elements = parent.getElementsByTagName(tagName);
+            return elements.length > 0 ? elements[0].textContent.trim() : '';
+        }
+
+        // Determine object type
+        function determineObjectType(objectName) {
+            if (objectName.endsWith('__c')) return 'custom';
+            if (objectName.endsWith('__x')) return 'external';
+            if (objectName.endsWith('__mdt')) return 'custom';
+            
+            const systemObjects = ['User', 'Profile', 'Permission', 'Organization', 'Group', 'Role'];
+            if (systemObjects.some(obj => objectName.includes(obj))) return 'system';
+            
+            return 'standard';
+        }
+
+        // Render diagram
+        function renderDiagram() {
+            const objectsLayer = container.select('.objects-layer');
+            const relationshipsLayer = container.select('.relationships-layer');
+
+            // Clear existing elements
+            objectsLayer.selectAll('*').remove();
+            relationshipsLayer.selectAll('*').remove();
+
+            // Filter objects
+            const filteredObjects = Array.from(objects.values()).filter(obj => {
+                if (currentFilter !== 'all' && obj.type !== currentFilter) return false;
+                if (searchTerm && !obj.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+                    !obj.label.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+                return true;
+            });
+
+            // Render relationships
+            const visibleObjectIds = new Set(filteredObjects.map(obj => obj.id));
+            const filteredRelationships = relationships.filter(rel => 
+                visibleObjectIds.has(rel.source) && 
+                (visibleObjectIds.has(rel.target) || objects.has(rel.target))
+            );
+
+            const relationshipElements = relationshipsLayer.selectAll('.relationship')
+                .data(filteredRelationships)
+                .enter()
+                .append('path')
+                .attr('class', d => `relationship-line ${d.type}`)
+                .attr('marker-end', d => `url(#arrow-${d.type})`)
+                .on('mouseover', showRelationshipTooltip)
+                .on('mouseout', hideTooltip);
+
+            // Render objects
+            const objectGroups = objectsLayer.selectAll('.object')
+                .data(filteredObjects)
+                .enter()
+                .append('g')
+                .attr('class', 'object')
+                .attr('transform', d => `translate(${d.x}, ${d.y})`)
+                .call(d3.drag()
+                    .on('start', dragStarted)
+                    .on('drag', dragged)
+                    .on('end', dragEnded))
+                .on('click', selectObject);
+
+            // Create foreign object for HTML content
+            objectGroups.each(function(d) {
+                const group = d3.select(this);
+                const card = createObjectCard(d);
+                
+                group.append('foreignObject')
+                    .attr('width', 300)
+                    .attr('height', 500)
+                    .html(card);
+            });
+
+            updateRelationshipPaths();
+            updateMinimap();
+        }
+
+        // Create object card HTML
+        function createObjectCard(object) {
+            const maxFieldsToShow = 5;
+            const fieldsToShow = object.fields.slice(0, maxFieldsToShow);
+            const hasMoreFields = object.fields.length > maxFieldsToShow;
+
+            return `
+                <div class="object-card ${selectedObject === object.id ? 'selected' : ''}" data-id="${object.id}">
+                    <div class="object-header ${object.type}">
+                        <svg class="object-type-icon ${object.type}" width="16" height="16" viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                        <span class="object-name" title="${object.label}">${object.label}</span>
+                        <div class="object-actions">
+                            <button class="object-action-btn" onclick="showObjectDetails('${object.id}')" title="View Details">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="object-body">
+                        ${object.description ? `
+                        <div class="object-info">
+                            <div class="object-info-item">
+                                <span class="object-info-label">API:</span>
+                                <span class="object-info-value">${object.name}</span>
+                            </div>
+                            ${object.description ? `
+                            <div class="object-info-item">
+                                <span class="object-info-label">Desc:</span>
+                                <span class="object-info-value">${object.description}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                        ` : ''}
+                        <div class="fields-container">
+                            ${fieldsToShow.map(field => createFieldHTML(field)).join('')}
+                            ${hasMoreFields ? `
+                            <div style="text-align: center; padding: 0.5rem; color: var(--text-tertiary); font-size: 0.75rem;">
+                                +${object.fields.length - maxFieldsToShow} more fields
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Create field HTML
+        function createFieldHTML(field) {
+            const isRelationship = field.type === 'Lookup' || field.type === 'MasterDetail';
+            
+            return `
+                <div class="field-item ${isRelationship ? field.type.toLowerCase().replace('detail', '-detail') : ''}">
+                    <div class="field-header">
+                        <span class="field-name" title="${field.label || field.fullName}">${field.label || field.fullName}</span>
+                        <span class="field-type ${isRelationship ? field.type.toLowerCase().replace('detail', '-detail') : ''}">${field.type}</span>
+                    </div>
+                    <div class="field-details">
+                        ${field.required ? '<span class="field-detail"><span class="field-icon">✓</span>Required</span>' : ''}
+                        ${field.unique ? '<span class="field-detail"><span class="field-icon">◆</span>Unique</span>' : ''}
+                        ${field.externalId ? '<span class="field-detail"><span class="field-icon">🔗</span>External ID</span>' : ''}
+                        ${field.referenceTo ? `<span class="field-detail">→ ${field.referenceTo}</span>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Update relationship paths
+        function updateRelationshipPaths() {
+            container.selectAll('.relationship-line')
+                .attr('d', d => {
+                    const source = objects.get(d.source);
+                    const target = objects.get(d.target);
+                    if (!source || !target) return '';
+
+                    const sx = source.x + 150;
+                    const sy = source.y + 50;
+                    const tx = target.x + 150;
+                    const ty = target.y + 50;
+
+                    // Calculate control points for curved line
+                    const dx = tx - sx;
+                    const dy = ty - sy;
+                    const dr = Math.sqrt(dx * dx + dy * dy);
+                    const curve = dr * 0.3;
+
+                    return `M${sx},${sy} Q${sx + dx/2},${sy + dy/2 - curve} ${tx},${ty}`;
+                });
+        }
+
+        // Drag functions
+        function dragStarted(event, d) {
+            d3.select(this).raise();
+        }
+
+        function dragged(event, d) {
+            d.x = event.x;
+            d.y = event.y;
+            d3.select(this).attr('transform', `translate(${d.x}, ${d.y})`);
+            updateRelationshipPaths();
+        }
+
+        function dragEnded(event, d) {
+            updateMinimap();
+        }
+
+        // Select object
+        function selectObject(event, d) {
+            selectedObject = d.id;
+            container.selectAll('.object-card').classed('selected', false);
+            d3.select(this).select('.object-card').classed('selected', true);
+            showObjectDetails(d.id);
+        }
+
+        // Show object details
+        function showObjectDetails(objectId) {
+            const object = objects.get(objectId);
+            if (!object) return;
+
+            const propertiesContent = document.getElementById('propertiesContent');
+            
+            propertiesContent.innerHTML = `
+                <div class="property-section">
+                    <div class="property-section-title">Object Information</div>
+                    <div class="property-item">
+                        <div class="property-label">Label</div>
+                        <div class="property-value">${object.label}</div>
+                    </div>
+                    <div class="property-item">
+                        <div class="property-label">API Name</div>
+                        <div class="property-value">${object.name}</div>
+                    </div>
+                    <div class="property-item">
+                        <div class="property-label">Type</div>
+                        <div class="property-value">${object.type}</div>
+                    </div>
+                    ${object.description ? `
+                    <div class="property-item">
+                        <div class="property-label">Description</div>
+                        <div class="property-value">${object.description}</div>
+                    </div>
+                    ` : ''}
+                    ${object.deploymentStatus ? `
+                    <div class="property-item">
+                        <div class="property-label">Deployment Status</div>
+                        <div class="property-value">${object.deploymentStatus}</div>
+                    </div>
+                    ` : ''}
+                    ${object.sharingModel ? `
+                    <div class="property-item">
+                        <div class="property-label">Sharing Model</div>
+                        <div class="property-value">${object.sharingModel}</div>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <div class="property-section">
+                    <div class="property-section-title">Features</div>
+                    <div class="property-item">
+                        <div class="property-value">
+                            ${object.enableActivities ? '✓ Activities<br>' : ''}
+                            ${object.enableHistory ? '✓ Field History<br>' : ''}
+                            ${object.enableReports ? '✓ Reports<br>' : ''}
+                            ${object.enableSearch ? '✓ Search<br>' : ''}
+                            ${object.enableSharing ? '✓ Sharing<br>' : ''}
+                            ${object.enableStreamingApi ? '✓ Streaming API<br>' : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="property-section">
+                    <div class="property-section-title">Fields (${object.fields.length})</div>
+                    ${object.fields.map(field => `
+                        <div class="property-item">
+                            <div class="property-label">${field.label || field.fullName}</div>
+                            <div class="property-value">
+                                Type: ${field.type}<br>
+                                ${field.required ? 'Required<br>' : ''}
+                                ${field.unique ? 'Unique<br>' : ''}
+                                ${field.referenceTo ? `References: ${field.referenceTo}<br>` : ''}
+                                ${field.formula ? `Formula: ${field.formula}<br>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            document.getElementById('propertiesPanel').classList.add('open');
+        }
+
+        // Auto layout
+        function autoLayout() {
+            const objectArray = Array.from(objects.values());
+            const cols = Math.ceil(Math.sqrt(objectArray.length));
+            const spacing = 350;
+            const startX = 100;
+            const startY = 100;
+
+            objectArray.forEach((obj, index) => {
+                const col = index % cols;
+                const row = Math.floor(index / cols);
+                obj.x = startX + col * spacing;
+                obj.y = startY + row * spacing;
+            });
+
+            renderDiagram();
+            fitToScreen();
+        }
+
+        // Zoom functions
+        function handleZoom(event) {
+            scale = event.transform.k;
+            translate = [event.transform.x, event.transform.y];
+            container.attr('transform', event.transform);
+            updateMinimap();
+        }
+
+        function zoomIn() {
+            svg.transition().duration(300).call(zoom.scaleBy, 1.3);
+        }
+
+        function zoomOut() {
+            svg.transition().duration(300).call(zoom.scaleBy, 0.7);
+        }
+
+        function fitToScreen() {
+            if (objects.size === 0) return;
+
+            const bounds = container.node().getBBox();
+            const fullWidth = svg.node().clientWidth;
+            const fullHeight = svg.node().clientHeight;
+            const width = bounds.width;
+            const height = bounds.height;
+            const midX = bounds.x + width / 2;
+            const midY = bounds.y + height / 2;
+
+            const scale = 0.9 / Math.max(width / fullWidth, height / fullHeight);
+            const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
+
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+            );
+        }
+
+        // Handle search
+        function handleSearch(event) {
+            searchTerm = event.target.value.toLowerCase();
+            renderDiagram();
+        }
+
+        // Handle filter
+        function handleFilter(event) {
+            document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            currentFilter = event.target.dataset.filter;
+            renderDiagram();
+        }
+
+        // Toggle properties panel
+        function toggleProperties() {
+            document.getElementById('propertiesPanel').classList.toggle('open');
+        }
+
+        // Show/hide loading
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'flex' : 'none';
+        }
+
+        // Hide empty state
+        function hideEmptyState() {
+            document.getElementById('emptyState').style.display = 'none';
+        }
+
+        // Update file count
+        function updateFileCount() {
+            const count = objects.size;
+            document.getElementById('fileCount').textContent = 
+                count === 0 ? 'No objects loaded' : `${count} object${count === 1 ? '' : 's'} loaded`;
+        }
+
+        // Show tooltip
+        function showRelationshipTooltip(event, d) {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.innerHTML = `
+                <strong>${d.fieldLabel || d.fieldName}</strong><br>
+                ${d.source} → ${d.target}<br>
+                Type: ${d.type}<br>
+                ${d.required ? 'Required' : 'Optional'}
+            `;
+            tooltip.style.opacity = 1;
+            tooltip.style.left = (event.pageX + 10) + 'px';
+            tooltip.style.top = (event.pageY - 30) + 'px';
+        }
+
+        // Hide tooltip
+        function hideTooltip() {
+            document.getElementById('tooltip').style.opacity = 0;
+        }
+
+        // Update minimap
+        function updateMinimap() {
+            // Minimap implementation would go here
+        }
+
+        // Handle resize
+        function handleResize() {
+            const canvas = document.getElementById('canvas');
+            const rect = canvas.getBoundingClientRect();
+            svg.attr('width', rect.width).attr('height', rect.height);
+        }
+
+        // Export diagram
+        function exportDiagram() {
+            // Export functionality would go here
+            alert('Export functionality would be implemented here');
+        }
+
+        // Show help
+        function showHelp() {
+            alert('Schema Builder Help:\n\n' +
+                  '• Upload .object files to visualize your schema\n' +
+                  '• Drag objects to rearrange them\n' +
+                  '• Click objects to see details\n' +
+                  '• Use filters to show/hide object types\n' +
+                  '• Auto Layout arranges objects in a grid');
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
+apps-fileview.texmex_20250605.00_p3
+salesforce-erd-enhanced.html
+Displaying salesforce-erd-enhanced.html.

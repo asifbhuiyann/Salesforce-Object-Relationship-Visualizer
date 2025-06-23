@@ -1,0 +1,1357 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salesforce Object Relationship Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            height: calc(100vh - 40px);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0176d3 0%, #005fb2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.5rem;
+            font-weight: 300;
+        }
+
+        .header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .file-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-label {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #0176d3;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .file-input-label:hover {
+            background: #005fb2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(1, 118, 211, 0.3);
+        }
+
+        .file-count {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .search-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #0176d3;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 16px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .filter-btn.active {
+            background: #0176d3;
+            color: white;
+            border-color: #0176d3;
+        }
+
+        .legend {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .legend-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .legend-items {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #visualization {
+            position: relative;
+            background: white;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            background: #f8f9fa;
+            border-left: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .sidebar.hidden {
+            display: none;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: white;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #666;
+            padding: 5px;
+            border-radius: 4px;
+            transition: background-color 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .object-info {
+            margin-bottom: 20px;
+        }
+
+        .object-info h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .object-info .info-item {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .object-info .info-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .fields-section {
+            margin-top: 20px;
+        }
+
+        .fields-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .fields-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .fields-filter {
+            display: flex;
+            gap: 5px;
+        }
+
+        .field-filter-btn {
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 12px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .field-filter-btn.active {
+            background: #0176d3;
+            color: white;
+            border-color: #0176d3;
+        }
+
+        .field-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .field-item {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .field-item:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .field-item.relationship {
+            border-left: 4px solid #0176d3;
+        }
+
+        .field-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .field-type {
+            font-size: 12px;
+            color: #666;
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 4px;
+        }
+
+        .field-type.lookup {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .field-type.master-detail {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .field-details {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            max-width: 320px;
+            line-height: 1.4;
+        }
+
+        .node {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            stroke: #fff;
+            stroke-width: 2;
+        }
+
+        .node:hover {
+            stroke-width: 4;
+            filter: brightness(1.1);
+        }
+
+        .node.standard {
+            fill: #4CAF50;
+        }
+
+        .node.custom {
+            fill: #FF9800;
+        }
+
+        .node.system {
+            fill: #9C27B0;
+        }
+
+        .node.external {
+            fill: #2196F3;
+        }
+
+        .node.selected {
+            stroke: #ff0000;
+            stroke-width: 4;
+            filter: brightness(1.2);
+        }
+
+        .node.highlighted {
+            stroke: #ff6b6b;
+            stroke-width: 3;
+            filter: brightness(1.1);
+        }
+
+        .link {
+            stroke: #999;
+            stroke-width: 1.5;
+            stroke-opacity: 0.6;
+            fill: none;
+            transition: all 0.3s ease;
+        }
+
+        .link.lookup {
+            stroke: #4CAF50;
+            stroke-dasharray: 4,4;
+            stroke-width: 2;
+        }
+
+        .link.master-detail {
+            stroke: #F44336;
+            stroke-width: 3;
+        }
+
+        .link.highlighted {
+            stroke-opacity: 1;
+            stroke-width: 3;
+        }
+
+        .node-label {
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 11px;
+            fill: #333;
+            text-anchor: middle;
+            pointer-events: none;
+            font-weight: 500;
+        }
+
+        .node-label.highlighted {
+            font-weight: 700;
+            fill: #000;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 100px 20px;
+            color: #666;
+        }
+
+        .no-data h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .zoom-btn {
+            width: 40px;
+            height: 40px;
+            background: #0176d3;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .zoom-btn:hover {
+            background: #005fb2;
+            transform: scale(1.1);
+        }
+
+        .stats {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            border: 1px solid #ddd;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 16px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0176d3;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                position: fixed;
+                top: 0;
+                right: 0;
+                width: 400px;
+                height: 100vh;
+                z-index: 1000;
+                box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Salesforce Object Relationship Visualizer</h1>
+            <p>Upload your Salesforce metadata to visualize object relationships</p>
+        </div>
+        
+        <div class="controls">
+            <div class="file-section">
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" class="file-input" accept=".object,.xml" multiple>
+                    <label for="fileInput" class="file-input-label">Upload Metadata Files</label>
+                </div>
+                <div class="file-count" id="fileCount">No files selected</div>
+            </div>
+            
+            <div class="search-section">
+                <input type="text" id="searchBox" class="search-box" placeholder="Search objects by name or label...">
+                <div class="filter-controls">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="standard">Standard</button>
+                    <button class="filter-btn" data-filter="custom">Custom</button>
+                    <button class="filter-btn" data-filter="system">System</button>
+                    <button class="filter-btn" data-filter="external">External</button>
+                </div>
+            </div>
+            
+            <div class="legend">
+                <div class="legend-title">Object Types</div>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4CAF50;"></div>
+                        <span>Standard</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #FF9800;"></div>
+                        <span>Custom</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #9C27B0;"></div>
+                        <span>System</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #2196F3;"></div>
+                        <span>External</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div id="visualization">
+                <div class="no-data">
+                    <h3>No Data Loaded</h3>
+                    <p>Please upload your Salesforce metadata files (.object files) to visualize object relationships.</p>
+                    <p><strong>Instructions:</strong> Select all .object files from your metadata/unpackaged/objects folder</p>
+                </div>
+                
+                <div class="zoom-controls" style="display: none;">
+                    <button class="zoom-btn" onclick="zoomIn()">+</button>
+                    <button class="zoom-btn" onclick="zoomOut()">−</button>
+                    <button class="zoom-btn" onclick="resetZoom()" title="Reset Zoom">⌂</button>
+                    <button class="zoom-btn" onclick="fitToScreen()" title="Fit to Screen">⚏</button>
+                </div>
+                
+                <div class="stats" style="display: none;">
+                    <div id="objectCount">Objects: 0</div>
+                    <div id="relationshipCount">Relationships: 0</div>
+                </div>
+            </div>
+            
+            <div class="sidebar hidden" id="sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-title">Object Details</div>
+                    <button class="close-btn" onclick="closeSidebar()">×</button>
+                </div>
+                <div class="sidebar-content" id="sidebarContent">
+                    <!-- Object details will be populated here -->
+                </div>
+            </div>
+        </div>
+        
+        <div class="tooltip" id="tooltip"></div>
+    </div>
+
+    <script>
+        let allData = { nodes: [], links: [] };
+        let filteredData = { nodes: [], links: [] };
+        let svg, simulation, zoom;
+        let searchTerm = '';
+        let activeFilter = 'all';
+        let fieldFilter = 'all';
+        let width, height;
+        let selectedObject = null;
+
+        // Initialize the visualization
+        function initVisualization() {
+            const container = d3.select('#visualization');
+            width = container.node().clientWidth;
+            height = container.node().clientHeight;
+
+            // Clear existing SVG
+            container.select('svg').remove();
+
+            svg = container.append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            // Create zoom behavior
+            zoom = d3.zoom()
+                .scaleExtent([0.1, 5])
+                .on('zoom', (event) => {
+                    svg.select('.main-group').attr('transform', event.transform);
+                });
+
+            svg.call(zoom);
+
+            // Create main group for zooming
+            svg.append('g').attr('class', 'main-group');
+
+            // Create simulation
+            simulation = d3.forceSimulation()
+                .force('link', d3.forceLink().id(d => d.id).distance(d => {
+                    return d.type === 'master-detail' ? 80 : 120;
+                }))
+                .force('charge', d3.forceManyBody().strength(-400))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(35))
+                .force('x', d3.forceX(width / 2).strength(0.1))
+                .force('y', d3.forceY(height / 2).strength(0.1));
+        }
+
+        // File input handler
+        document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+
+        function handleFileUpload(event) {
+            const files = Array.from(event.target.files);
+            
+            if (files.length === 0) return;
+
+            document.getElementById('fileCount').textContent = `${files.length} files selected`;
+            
+            // Show loading
+            showLoading();
+            
+            Promise.all(files.map(file => readFile(file)))
+                .then(contents => {
+                    parseMetadata(contents);
+                    applyFilters();
+                    updateVisualization();
+                })
+                .catch(error => {
+                    console.error('Error reading files:', error);
+                    alert('Error reading files. Please make sure they are valid Salesforce metadata files.');
+                    hideLoading();
+                });
+        }
+
+        function showLoading() {
+            const container = d3.select('#visualization');
+            container.select('.no-data').remove();
+            container.append('div').attr('class', 'loading')
+                .html('<div class="spinner"></div>Processing metadata files...');
+        }
+
+        function hideLoading() {
+            d3.select('.loading').remove();
+        }
+
+        function readFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve({ name: file.name, content: e.target.result });
+                reader.onerror = reject;
+                reader.readAsText(file);
+            });
+        }
+
+        function parseMetadata(fileContents) {
+            allData = { nodes: [], links: [] };
+            const objectMap = new Map();
+            let processedCount = 0;
+
+            console.log(`Starting to parse ${fileContents.length} files...`);
+
+            fileContents.forEach(({ name, content }) => {
+                try {
+                    console.log(`Parsing file: ${name}`);
+                    const metadata = parseSalesforceObjectXML(content);
+                    if (metadata) {
+                        processMetadata(metadata, objectMap, name);
+                        processedCount++;
+                        console.log(`Successfully parsed: ${name}`);
+                    } else {
+                        console.warn(`Failed to parse metadata from: ${name}`);
+                    }
+                } catch (error) {
+                    console.error(`Error parsing ${name}:`, error);
+                }
+            });
+
+            // Convert map to arrays
+            allData.nodes = Array.from(objectMap.values());
+            
+            console.log(`Successfully processed ${processedCount} objects`);
+            console.log(`Total nodes: ${allData.nodes.length}`);
+            console.log(`Total relationships: ${allData.links.length}`);
+            
+            // Debug: Log first few objects
+            allData.nodes.slice(0, 3).forEach(node => {
+                console.log(`Object: ${node.name}`, node);
+            });
+            
+            // Update stats
+            updateStats();
+        }
+
+        function parseSalesforceObjectXML(xmlString) {
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+                
+                // Check for parsing errors
+                const parserErrors = xmlDoc.getElementsByTagName('parsererror');
+                if (parserErrors.length > 0) {
+                    console.error('XML parsing error:', parserErrors[0].textContent);
+                    return null;
+                }
+
+                const customObject = xmlDoc.getElementsByTagName('CustomObject')[0];
+                if (!customObject) {
+                    console.warn('No CustomObject found in XML');
+                    return null;
+                }
+
+                const result = {
+                    fullName: '',
+                    label: '',
+                    description: '',
+                    fields: [],
+                    customSettingsType: null,
+                    deploymentStatus: null,
+                    sharingModel: null,
+                    enableActivities: false,
+                    enableHistory: false,
+                    enableReports: false
+                };
+
+                // Extract basic object info with better error handling
+                const extractText = (tagName) => {
+                    try {
+                        const elements = customObject.getElementsByTagName(tagName);
+                        return elements.length > 0 ? elements[0].textContent.trim() : '';
+                    } catch (e) {
+                        console.warn(`Error extracting ${tagName}:`, e);
+                        return '';
+                    }
+                };
+
+                result.label = extractText('label');
+                result.description = extractText('description');
+                result.customSettingsType = extractText('customSettingsType');
+                result.deploymentStatus = extractText('deploymentStatus');
+                result.sharingModel = extractText('sharingModel');
+                result.enableActivities = extractText('enableActivities') === 'true';
+                result.enableHistory = extractText('enableHistory') === 'true';
+                result.enableReports = extractText('enableReports') === 'true';
+
+                // Extract fields with improved parsing
+                const fields = customObject.getElementsByTagName('fields');
+                console.log(`Found ${fields.length} fields in object`);
+                
+                for (let i = 0; i < fields.length; i++) {
+                    const field = fields[i];
+                    const fieldData = {
+                        fullName: extractFieldText(field, 'fullName'),
+                        label: extractFieldText(field, 'label'),
+                        type: extractFieldText(field, 'type'),
+                        referenceTo: extractFieldText(field, 'referenceTo'),
+                        relationshipName: extractFieldText(field, 'relationshipName'),
+                        deleteConstraint: extractFieldText(field, 'deleteConstraint'),
+                        required: extractFieldText(field, 'required') === 'true',
+                        unique: extractFieldText(field, 'unique') === 'true',
+                        externalId: extractFieldText(field, 'externalId') === 'true',
+                        length: extractFieldText(field, 'length'),
+                        precision: extractFieldText(field, 'precision'),
+                        scale: extractFieldText(field, 'scale'),
+                        defaultValue: extractFieldText(field, 'defaultValue'),
+                        formula: extractFieldText(field, 'formula'),
+                        description: extractFieldText(field, 'description')
+                    };
+
+                    if (fieldData.fullName) {
+                        result.fields.push(fieldData);
+                        
+                        // Debug relationship fields
+                        if (fieldData.type === 'Lookup' || fieldData.type === 'MasterDetail') {
+                            console.log(`Relationship field found: ${fieldData.fullName} -> ${fieldData.referenceTo}`);
+                        }
+                    }
+                }
+
+                console.log(`Parsed object with ${result.fields.length} fields`);
+                return result;
+            } catch (error) {
+                console.error('Error parsing XML:', error);
+                return null;
+            }
+        }
+
+        function extractFieldText(fieldElement, tagName) {
+            try {
+                const elements = fieldElement.getElementsByTagName(tagName);
+                return elements.length > 0 ? elements[0].textContent.trim() : '';
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function processMetadata(metadata, objectMap, fileName) {
+            // Extract object name from filename
+            const objectName = fileName.replace('.object', '').replace('.xml', '').replace(/.*[\/\\]/, '');
+            
+            if (!objectName) {
+                console.warn('Could not extract object name from filename:', fileName);
+                return;
+            }
+
+            console.log(`Processing object: ${objectName}`);
+
+            const objectType = determineObjectType(objectName, metadata);
+            
+            const objectData = {
+                id: objectName,
+                name: objectName,
+                type: objectType,
+                label: metadata.label || objectName,
+                description: metadata.description || '',
+                fields: metadata.fields || [],
+                customSettingsType: metadata.customSettingsType,
+                deploymentStatus: metadata.deploymentStatus,
+                sharingModel: metadata.sharingModel,
+                enableActivities: metadata.enableActivities,
+                enableHistory: metadata.enableHistory,
+                enableReports: metadata.enableReports
+            };
+
+            objectMap.set(objectName, objectData);
+
+            // Process relationships from fields
+            if (metadata.fields && metadata.fields.length > 0) {
+                const relationshipFields = metadata.fields.filter(f => 
+                    (f.type === 'Lookup' || f.type === 'MasterDetail') && f.referenceTo
+                );
+                
+                console.log(`Found ${relationshipFields.length} relationship fields in ${objectName}`);
+                
+                relationshipFields.forEach(field => {
+                    processField(field, objectName, objectMap);
+                });
+            }
+        }
+
+        function processField(field, parentObject, objectMap) {
+            const fieldType = field.type || '';
+            const referenceTo = field.referenceTo;
+
+            console.log(`Processing relationship field: ${field.fullName} (${fieldType}) -> ${referenceTo}`);
+
+            // Check if this is a relationship field
+            if ((fieldType === 'Lookup' || fieldType === 'MasterDetail') && referenceTo) {
+                // Ensure target object exists in map
+                if (!objectMap.has(referenceTo)) {
+                    const targetObjectType = determineObjectType(referenceTo);
+                    console.log(`Creating referenced object: ${referenceTo}`);
+                    objectMap.set(referenceTo, {
+                        id: referenceTo,
+                        name: referenceTo,
+                        type: targetObjectType,
+                        label: referenceTo,
+                        description: 'Referenced object (not in uploaded metadata)',
+                        fields: [],
+                        isReferenced: true
+                    });
+                }
+
+                // Determine relationship type
+                let relationshipType = 'lookup';
+                if (fieldType === 'MasterDetail') {
+                    relationshipType = 'master-detail';
+                }
+
+                // Add relationship link
+                const linkData = {
+                    source: parentObject,
+                    target: referenceTo,
+                    type: relationshipType,
+                    fieldName: field.fullName,
+                    fieldLabel: field.label,
+                    relationshipName: field.relationshipName,
+                    deleteConstraint: field.deleteConstraint,
+                    required: field.required || false
+                };
+
+                allData.links.push(linkData);
+                console.log(`Added relationship: ${parentObject} -> ${referenceTo} (${relationshipType})`);
+            }
+        }
+
+        function determineObjectType(objectName, metadata) {
+            if (objectName.endsWith('__c')) return 'custom';
+            if (objectName.endsWith('__x')) return 'external';
+            if (objectName.endsWith('__mdt')) return 'custom';
+            if (metadata && metadata.customSettingsType) return 'custom';
+            
+            const systemObjects = ['User', 'Profile', 'Permission', 'Organization', 'Group', 'Role', 'UserRole'];
+            if (systemObjects.some(sys => objectName.includes(sys))) return 'system';
+            
+            return 'standard';
+        }
+
+        function applyFilters() {
+            let nodes = allData.nodes;
+            let links = allData.links;
+
+            // Apply search filter
+            if (searchTerm.trim()) {
+                const search = searchTerm.toLowerCase();
+                nodes = nodes.filter(d => 
+                    d.name.toLowerCase().includes(search) ||
+                    d.label.toLowerCase().includes(search)
+                );
+            }
+
+            // Apply type filter
+            if (activeFilter !== 'all') {
+                nodes = nodes.filter(d => d.type === activeFilter);
+            }
+
+            // Filter links to only include nodes that are visible
+            const visibleNodeIds = new Set(nodes.map(d => d.id));
+            links = links.filter(d => 
+                visibleNodeIds.has(d.source.id || d.source) && 
+                visibleNodeIds.has(d.target.id || d.target)
+            );
+
+            filteredData = { nodes, links };
+        }
+
+        function updateVisualization() {
+            if (filteredData.nodes.length === 0) {
+                hideLoading();
+                return;
+            }
+
+            // Hide loading and no-data, show controls
+            hideLoading();
+            d3.select('.no-data').style('display', 'none');
+            d3.select('.zoom-controls').style('display', 'flex');
+            d3.select('.stats').style('display', 'block');
+
+            const mainGroup = svg.select('.main-group');
+
+            // Update links
+            const link = mainGroup.selectAll('.link')
+                .data(filteredData.links, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+
+            link.exit().remove();
+
+            const linkEnter = link.enter().append('line')
+                .attr('class', d => `link ${d.type}`)
+                .on('mouseover', function(event, d) {
+                    d3.select(this).classed('highlighted', true);
+                    showLinkTooltip(event, d);
+                })
+                .on('mouseout', function(event, d) {
+                    d3.select(this).classed('highlighted', false);
+                    hideTooltip();
+                });
+
+            const linkUpdate = link.merge(linkEnter);
+
+            // Update nodes
+            const nodeGroup = mainGroup.selectAll('.node-group')
+                .data(filteredData.nodes, d => d.id);
+
+            nodeGroup.exit().remove();
+
+            const nodeEnter = nodeGroup.enter().append('g')
+                .attr('class', 'node-group');
+
+            nodeEnter.append('circle')
+                .attr('class', d => `node ${d.type}`)
+                .attr('r', d => d.isReferenced ? 15 : 20)
+                .on('mouseover', showNodeTooltip)
+                .on('mouseout', hideTooltip)
+                .on('click', function(event, d) {
+                    selectObject(d);
+                    showObjectDetails(d);
+                });
+
+            nodeEnter.append('text')
+                .attr('class', 'node-label')
+                .attr('dy', '.35em')
+                .text(d => {
+                    const name = d.label && d.label !== d.name ? d.label : d.name;
+                    return name.length > 12 ? name.substring(0, 12) + '...' : name;
+                });
+
+            const nodeUpdate = nodeGroup.merge(nodeEnter);
+
+            // Add drag behavior
+            const drag = d3.drag()
+                .on('start', dragstarted)
+                .on('drag', dragged)
+                .on('end', dragended);
+
+            nodeUpdate.call(drag);
+
+            // Update simulation
+            simulation.nodes(filteredData.nodes);
+            simulation.force('link').links(filteredData.links);
+            simulation.alpha(1).restart();
+
+            simulation.on('tick', () => {
+                linkUpdate
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                nodeUpdate
+                    .attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            updateStats();
+        }
+
+        function selectObject(d) {
+            // Remove previous selection
+            svg.selectAll('.node').classed('selected', false);
+            
+            // Select current object
+            svg.selectAll('.node').filter(node => node.id === d.id).classed('selected', true);
+            
+            selectedObject = d;
+        }
+
+        function showObjectDetails(objectData) {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarContent = document.getElementById('sidebarContent');
+            
+            // Show sidebar if hidden
+            sidebar.classList.remove('hidden');
+            
+            // Generate object details HTML
+            const relationshipFields = objectData.fields.filter(f => 
+                f.type === 'Lookup' || f.type === 'MasterDetail'
+            );
+            
+            const standardFields = objectData.fields.filter(f => 
+                f.type !== 'Lookup' && f.type !== 'MasterDetail'
+            );
+
+            const html = `
+                <div class="object-info">
+                    <h3>${objectData.label || objectData.name}</h3>
+                    <div class="info-item">
+                        <span class="info-label">API Name:</span> ${objectData.name}
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Type:</span> ${objectData.type}
+                    </div>
+                    ${objectData.description ? `
+                    <div class="info-item">
+                        <span class="info-label">Description:</span> ${objectData.description}
+                    </div>
+                    ` : ''}
+                    ${objectData.customSettingsType ? `
+                    <div class="info-item">
+                        <span class="info-label">Custom Settings:</span> ${objectData.customSettingsType}
+                    </div>
+                    ` : ''}
+                    ${objectData.deploymentStatus ? `
+                    <div class="info-item">
+                        <span class="info-label">Deployment Status:</span> ${objectData.deploymentStatus}
+                    </div>
+                    ` : ''}
+                    ${objectData.sharingModel ? `
+                    <div class="info-item">
+                        <span class="info-label">Sharing Model:</span> ${objectData.sharingModel}
+                    </div>
+                    ` : ''}
+                    <div class="info-item">
+                        <span class="info-label">Activities:</span> ${objectData.enableActivities ? 'Enabled' : 'Disabled'}
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">History:</span> ${objectData.enableHistory ? 'Enabled' : 'Disabled'}
+                    </div>
+                </div>
+                
+                <div class="fields-section">
+                    <div class="fields-header">
+                        <div class="fields-title">Fields (${objectData.fields.length})</div>
+                        <div class="fields-filter">
+                            <button class="field-filter-btn ${fieldFilter === 'all' ? 'active' : ''}" onclick="setFieldFilter('all')">All</button>
+                            <button class="field-filter-btn ${fieldFilter === 'relationships' ? 'active' : ''}" onclick="setFieldFilter('relationships')">Relationships</button>
+                            <button class="field-filter-btn ${fieldFilter === 'standard' ? 'active' : ''}" onclick="setFieldFilter('standard')">Standard</button>
+                        </div>
+                    </div>
+                    <div class="field-list" id="fieldList">
+                        ${generateFieldsHTML(objectData.fields)}
+                    </div>
+                </div>
+            `;
+            
+            sidebarContent.innerHTML = html;
+        }
+
+        function generateFieldsHTML(fields) {
+            let filteredFields = fields;
+            
+            if (fieldFilter === 'relationships') {
+                filteredFields = fields.filter(f => f.type === 'Lookup' || f.type === 'MasterDetail');
+            } else if (fieldFilter === 'standard') {
+                filteredFields = fields.filter(f => f.type !== 'Lookup' && f.type !== 'MasterDetail');
+            }
+            
+            return filteredFields.map(field => {
+                const isRelationship = field.type === 'Lookup' || field.type === 'MasterDetail';
+                const fieldTypeClass = field.type === 'Lookup' ? 'lookup' : 
+                                     field.type === 'MasterDetail' ? 'master-detail' : '';
+                
+                let fieldDetails = [];
+                if (field.length) fieldDetails.push(`Length: ${field.length}`);
+                if (field.precision) fieldDetails.push(`Precision: ${field.precision}`);
+                if (field.scale) fieldDetails.push(`Scale: ${field.scale}`);
+                if (field.required) fieldDetails.push('Required');
+                if (field.unique) fieldDetails.push('Unique');
+                if (field.externalId) fieldDetails.push('External ID');
+                if (field.referenceTo) fieldDetails.push(`References: ${field.referenceTo}`);
+                if (field.deleteConstraint) fieldDetails.push(`Delete: ${field.deleteConstraint}`);
+                
+                let fieldDetailsHTML = '';
+                if (fieldDetails.length > 0) {
+                    fieldDetailsHTML = `<div class="field-details">${fieldDetails.join(' • ')}</div>`;
+                }
+                
+                return `
+                    <div class="field-item ${isRelationship ? 'relationship' : ''}">
+                        <div class="field-name">${field.label || field.fullName}</div>
+                        <div class="field-type ${fieldTypeClass}">${field.type}</div>
+                        ${field.description ? `<div class="field-details">${field.description}</div>` : ''}
+                        ${fieldDetailsHTML}
+                        ${field.formula ? `<div class="field-details"><strong>Formula:</strong> ${field.formula}</div>` : ''}
+                        ${field.defaultValue ? `<div class="field-details"><strong>Default:</strong> ${field.defaultValue}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function setFieldFilter(filter) {
+            fieldFilter = filter;
+            if (selectedObject) {
+                const fieldList = document.getElementById('fieldList');
+                if (fieldList) {
+                    fieldList.innerHTML = generateFieldsHTML(selectedObject.fields);
+                }
+                
+                // Update filter buttons
+                document.querySelectorAll('.field-filter-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.textContent.toLowerCase() === filter || 
+                        (filter === 'relationships' && btn.textContent === 'Relationships') ||
+                        (filter === 'standard' && btn.textContent === 'Standard'));
+                });
+            }
+        }
+
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.add('hidden');
+            svg.selectAll('.node').classed('selected', false);
+            selectedObject = null;
+        }
+
+        function showNodeTooltip(event, d) {
+            const tooltip = d3.select('#tooltip');
+            
+            const relationshipFields = d.fields.filter(f => f.type === 'Lookup' || f.type === 'MasterDetail');
+            const fieldsInfo = d.fields.length > 0 ? `<br><strong>Total Fields:</strong> ${d.fields.length}` : '';
+            const relationshipInfo = relationshipFields.length > 0 ? `<br><strong>Relationships:</strong> ${relationshipFields.length}` : '';
+            
+            tooltip.html(`
+                <strong>${d.label || d.name}</strong><br>
+                <strong>Type:</strong> ${d.type}<br>
+                <strong>API Name:</strong> ${d.name}${fieldsInfo}${relationshipInfo}
+                ${d.description ? `<br><strong>Description:</strong> ${d.description}` : ''}
+                ${d.isReferenced ? '<br><em>Referenced object (not in metadata)</em>' : ''}
+                <br><br><em>Click to view all fields</em>
+            `)
+            .style('left', (event.pageX + 10) + 'px')
+            .style('top', (event.pageY - 10) + 'px')
+            .style('opacity', 1);
+        }
+
+        function showLinkTooltip(event, d) {
+            const tooltip = d3.select('#tooltip');
+            
+            tooltip.html(`
+                <strong>Relationship</strong><br>
+                <strong>From:</strong> ${d.source.name || d.source}<br>
+                <strong>To:</strong> ${d.target.name || d.target}<br>
+                <strong>Type:</strong> ${d.type}<br>
+                <strong>Field:</strong> ${d.fieldName}
+                ${d.fieldLabel ? `<br><strong>Label:</strong> ${d.fieldLabel}` : ''}
+                ${d.deleteConstraint ? `<br><strong>Delete:</strong> ${d.deleteConstraint}` : ''}
+                ${d.required ? '<br><strong>Required:</strong> Yes' : ''}
+            `)
+            .style('left', (event.pageX + 10) + 'px')
+            .style('top', (event.pageY - 10) + 'px')
+            .style('opacity', 1);
+        }
+
+        function hideTooltip() {
+            d3.select('#tooltip').style('opacity', 0);
+        }
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        function updateStats() {
+            d3.select('#objectCount').text(`Objects: ${filteredData.nodes.length}/${allData.nodes.length}`);
+            d3.select('#relationshipCount').text(`Relationships: ${filteredData.links.length}/${allData.links.length}`);
+        }
+
+        // Zoom functions
+        function zoomIn() {
+            svg.transition().duration(300).call(zoom.scaleBy, 1.5);
+        }
+
+        function zoomOut() {
+            svg.transition().duration(300).call(zoom.scaleBy, 1 / 1.5);
+        }
+
+        function resetZoom() {
+            svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+        }
+
+        function fitToScreen() {
+            if (filteredData.nodes.length === 0) return;
+            
+            const bounds = svg.select('.main-group').node().getBBox();
+            const fullWidth = width;
+            const fullHeight = height;
+            const widthScale = fullWidth / bounds.width;
+            const heightScale = fullHeight / bounds.height;
+            const scale = Math.min(widthScale, heightScale) * 0.9;
+            const translate = [fullWidth / 2 - scale * (bounds.x + bounds.width / 2), 
+                             fullHeight / 2 - scale * (bounds.y + bounds.height / 2)];
+            
+            svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
+        }
+
+        // Search functionality
+        document.getElementById('searchBox').addEventListener('input', (e) => {
+            searchTerm = e.target.value;
+            applyFilters();
+            updateVisualization();
+        });
+
+        // Filter functionality
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                activeFilter = e.target.dataset.filter;
+                applyFilters();
+                updateVisualization();
+            });
+        });
+
+        // Initialize
+        initVisualization();
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            setTimeout(() => {
+                initVisualization();
+                if (allData.nodes.length > 0) {
+                    applyFilters();
+                    updateVisualization();
+                }
+            }, 100);
+        });
+
+        // Close sidebar when clicking outside
+        document.addEventListener('click', (e) => {
+            const sidebar = document.getElementById('sidebar');
+            if (!sidebar.classList.contains('hidden') && 
+                !sidebar.contains(e.target) && 
+                !e.target.closest('.node-group')) {
+                closeSidebar();
+            }
+        });
+    </script>
+</body>
+</html>
+apps-fileview.texmex_20250605.00_p3
+salesforce_erd (2).html
+Displaying salesforce_erd (2).html.
